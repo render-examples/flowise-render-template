@@ -2,7 +2,7 @@
 
 > Self-host Flowise to build LLM agents and workflows visually, with the simplest single-instance setup on Render.
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/render-examples/flowise-render-template)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy-template/api/github/start?template_repo=flowise-render-template)
 
 This template runs the official `flowiseai/flowise` Docker image on a Render web service with SQLite on a persistent disk. It's the quickest way to stand up Flowise for a single team or a personal lab. If you need horizontal scaling, multi-instance deploys, or production-grade managed Postgres, use the [Postgres variant](https://github.com/render-examples/flowise-render-template-postgres) instead.
 
@@ -64,7 +64,7 @@ Region defaults to **`oregon`**. Override in `render.yaml` if you'd rather deplo
 
 ## Quickstart
 
-1. Click **[Deploy to Render](https://render.com/deploy?repo=https://github.com/render-examples/flowise-render-template)**.
+1. Click **[Deploy to Render](https://render.com/deploy-template/api/github/start?template_repo=flowise-render-template)**.
 2. Authorize the Render GitHub App if prompted, choose a destination Git account, and let Render fork this template into your account.
 3. On the Blueprint Apply screen, confirm the resources (1 web service + 1 disk). No secrets to fill in — Flowise creates its own.
 4. Click **Apply**. The first deploy takes ~90 seconds to pull the image and another ~30 seconds to boot.
