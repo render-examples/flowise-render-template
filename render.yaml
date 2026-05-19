@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+
+services:
+  - type: web
+    name: flowise
+    runtime: image
+    plan: starter
+    region: oregon
+    image:
+      url: docker.io/flowiseai/flowise:latest
+    healthCheckPath: /api/v1/ping
+    previews:
+      generation: off
+    disk:
+      name: flowise-data
+      mountPath: /root/.flowise
+      sizeGB: 5
+    envVars:
+      - key: PORT
+        value: "3000"
+
+      - key: DATABASE_TYPE
+        value: sqlite
+      - key: DATABASE_PATH
+        value: /root/.flowise
+
+      - key: SECRETKEY_STORAGE_TYPE
+        value: local
+      - key: SECRETKEY_PATH
+        value: /root/.flowise
+
+      - key: LOG_PATH
+        value: /root/.flowise/logs
+      - key: LOG_LEVEL
+        value: info
+
+      - key: STORAGE_TYPE
+        value: local
+      - key: BLOB_STORAGE_PATH
+        value: /root/.flowise/storage
+
+      - key: NUMBER_OF_PROXIES
+        value: "1"
+      - key: TRUST_PROXY
+        value: "true"
+      - key: DISABLE_FLOWISE_TELEMETRY
+        value: "true"
