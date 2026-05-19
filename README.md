@@ -50,15 +50,17 @@ What people build on this template:
 
 ```mermaid
 flowchart LR
-  user["User browser"] --> web["flowise<br/>(web service, starter)"]
+  user["User browser"] --> web["flowise<br/>(web service, standard)"]
   web --> disk[/"flowise-data<br/>5 GB disk<br/>/root/.flowise"/]
   web -.->|optional outbound| llm["LLM providers<br/>(OpenAI, Anthropic, etc.)"]
 ```
 
 | Resource | Type | Plan | Purpose |
 |----------|------|------|---------|
-| `flowise` | Web service (`runtime: image`) | `starter` | Runs `docker.io/flowiseai/flowise:latest`, serves the UI and API on `$PORT` |
+| `flowise` | Web service (`runtime: image`) | `standard` (2 GB / 1 CPU) | Runs `docker.io/flowiseai/flowise:latest`, serves the UI and API on `$PORT` |
 | `flowise-data` | Persistent disk | 5 GB | SQLite database, encryption keys, auth secrets, logs, file uploads — everything Flowise needs to persist |
+
+The `standard` plan is the floor: Flowise's Node process exceeds the `starter` plan's 512 MB during startup and OOMs before binding the port. See [Caveats](#caveats-and-limitations) for the details.
 
 Region defaults to **`oregon`**. Override in `render.yaml` if you'd rather deploy in Frankfurt, Singapore, Ohio, or anywhere else Render supports.
 
@@ -104,6 +106,7 @@ This template has no inter-service wiring (single service). The Postgres variant
 
 | Env var | Default | What it does |
 |---------|---------|--------------|
+| `NODE_OPTIONS` | `--max-old-space-size=460` | Bumps Node's heap so Flowise doesn't OOM on the `starter` plan's 512 MB container. Raise to `~1800` if you upgrade to `standard`, or higher on `pro`. |
 | `LOG_LEVEL` | `info` | Set to `warn` or `error` to quiet noisy logs, `debug` while triaging |
 | `NUMBER_OF_PROXIES` | `1` | Number of upstream proxies in front of Flowise (Render's edge counts as 1; leave as-is) |
 | `TRUST_PROXY` | `true` | Required so Flowise reads `X-Forwarded-*` correctly behind Render's edge |
@@ -120,19 +123,19 @@ Full upstream config reference: [Flowise Environment Variables](https://docs.flo
 
 | Resource | Plan | Monthly cost |
 |----------|------|--------------|
-| `flowise` web service | `starter` (0.5 CPU, 512 MB) | $7.00 |
+| `flowise` web service | `standard` (1 CPU, 2 GB) | $25.00 |
 | `flowise-data` disk | 5 GB SSD | $0.50 |
-| **Total** | | **~$7.50** |
+| **Total** | | **~$25.50** |
 
 Pricing source: [render.com/pricing](https://render.com/pricing).
 
-**Cheaper**
+**Why standard is the floor**
 
-- Drop to `plan: free` if you can tolerate the free instance's sleep behavior and lower limits. The Free plan **does not support disks**, so you'd also need to switch storage to S3 — see [Move file uploads off the disk](#move-file-uploads-off-the-disk). Honestly, $7.50/mo is the floor for a real Flowise install.
+The `starter` plan (512 MB) is not enough for Flowise — the Node process OOMs during startup before it can bind a port. `standard` (2 GB) handles startup comfortably and leaves room for light chatflow execution.
 
 **Scale up**
 
-- Bump `plan` to `standard` (1 CPU, 2 GB RAM) — recommended once you have more than a handful of concurrent users or run large chatflows.
+- Bump `plan` to `pro` (2 CPU, 4 GB) when you start running large RAG ingests or many concurrent chatflows.
 - Increase `disk.sizeGB` (max 1 TB on standard plans).
 - Switch to the [Postgres variant](https://github.com/render-examples/flowise-render-template-postgres) for production workloads, then drop the disk and move uploads to S3 to unlock horizontal scaling.
 
@@ -288,6 +291,14 @@ Notable migrations across Flowise major versions:
 
 **Fix:** Check the service logs for `EADDRINUSE` or `EACCES`. Confirm `PORT=3000` is set and that the disk shows **Mounted** under the service's **Disks** tab.
 
+### `No open ports detected` + `Reached heap limit Allocation failed - JavaScript heap out of memory`
+
+**Symptom:** Logs show Flowise starting (Data Source / migrations / Identity Manager init lines) followed by GC warnings, a `Reached heap limit Allocation failed` fatal error, and the service exits with status `139`. Render's port scanner gives up because the process keeps dying before binding.
+
+**Cause:** The web service is on the `starter` plan (512 MB), which is too small for Flowise's Node process at startup. The default Node heap is also small, and Flowise blows through ~250 MB before Identity Manager finishes.
+
+**Fix:** Edit `render.yaml`, set `plan: standard` (2 GB / 1 CPU), commit, push. This template ships with `standard` already; you only hit this if you manually downgraded the plan. NODE_OPTIONS / `--max-old-space-size` tweaks alone are not enough — Flowise genuinely needs more RAM than `starter` provides.
+
 ### Can't log in / "decryption failed" errors
 
 **Symptom:** UI shows "decryption failed" or saved credentials no longer work.
@@ -313,9 +324,9 @@ Notable migrations across Flowise major versions:
 
 ## FAQ
 
-### Can I run this on Render's free plan?
+### Can I run this on Render's free or starter plan?
 
-Not as-is. The free plan does not support persistent disks, and Flowise needs persistence for the SQLite database, encryption keys, and uploads. You'd need to switch to env-var secrets ([recipe](#move-secrets-to-env-vars)), move uploads to S3 ([recipe](#move-file-uploads-off-the-disk)), and switch to Postgres — at which point the [Postgres variant template](https://github.com/render-examples/flowise-render-template-postgres) is a cleaner starting point.
+No. The `starter` plan's 512 MB is below Flowise's minimum startup memory — the Node process OOMs before binding the port. The `free` plan additionally does not support persistent disks. `standard` (2 GB) is the floor for Flowise on Render regardless of variant.
 
 ### How do I migrate from an existing self-hosted Flowise?
 
@@ -362,6 +373,7 @@ Not in this template — that's an upcoming variant. For now, leave `MODE` unset
 
 ## Caveats and limitations
 
+- **Standard plan is the floor.** Flowise's Node process exceeds the `starter` plan's 512 MB during startup (the JS heap alone climbs past ~250 MB before Identity Manager finishes initializing) and OOMs before binding the port. The template uses `standard` (2 GB) so it deploys cleanly out of the box. Downgrading to `starter` will fail with `Reached heap limit Allocation failed - JavaScript heap out of memory` and `No open ports detected`.
 - **Single instance only.** The persistent disk pins this template to one instance and to restart-style deploys (~5 seconds of downtime per deploy, not zero-downtime).
 - **Image tag drift.** `latest` is mutable; subsequent deploys may behave differently than your first one. Pin a version for production.
 - **First image pull is slow.** ~90 seconds on cold caches. Subsequent deploys reuse the cached layer.

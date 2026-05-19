@@ -4,7 +4,7 @@ services:
   - type: web
     name: flowise
     runtime: image
-    plan: starter
+    plan: standard
     region: oregon
     image:
       url: docker.io/flowiseai/flowise:latest
